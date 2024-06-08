@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"fmt"
 	"html"
 	"strings"
 	"time"
@@ -19,9 +18,10 @@ type Post struct {
 	Content      string `json:"content"`
 	Privacy      string `json:"privacy"`
 	CreationDate string `json:"creationDate"`
-	Avatar	string	`json:"groupe_title"`
+	Avatar       string `json:"avatar"`
+	IsPublic     int     `json:"ispublic"`
 	// AllowedUsers []int
-	AllowedUsers []int  `json:allowedusers`
+	AllowedUsers []int `json:allowedusers`
 }
 
 type FeedPost struct {
@@ -40,7 +40,7 @@ type PostDetails struct {
 
 func (P *PostDetails) GetPost(DB *sql.DB, UserID, post_id int) error {
 	statement, err := DB.Prepare(`
-	SELECT U.id , U.firstName , U.lastName , P.id , coalesce(P.Group_id,0) as Group_id , P.titre ,  coalesce(P.image, '') as image , P.content , P.privacy , coalesce(P.creationDate,'') as creationDate , coalesce(G.title,'') as title , coalesce(G.description,'') as description
+	SELECT U.id , U.firstName , U.lastName , coalesce(U.avatar,'') as avatar   , P.id , coalesce(P.Group_id,0) as Group_id , P.titre ,  coalesce(P.image, '') as image , P.content , P.privacy , coalesce(P.creationDate,'') as creationDate , coalesce(G.title,'') as title , coalesce(G.description,'') as description
 	FROM Post as P 
 	JOIN User as U on U.id = P.User_id
    	LEFT JOIN "Group" as G on P.Group_id = G.id
@@ -54,7 +54,7 @@ func (P *PostDetails) GetPost(DB *sql.DB, UserID, post_id int) error {
 	if err != nil {
 		return err
 	}
-	sqlErr := statement.QueryRow(post_id, UserID, UserID, UserID, UserID).Scan(&P.Post.User_id, &P.Post.FirstName, &P.Post.LastName, &P.Post.Id, &P.Post.Group_id, &P.Post.Titre, &P.Post.Image, &P.Post.Content, &P.Post.Privacy, &P.Post.CreationDate, &P.GroupName, &P.Description)
+	sqlErr := statement.QueryRow(post_id, UserID, UserID, UserID, UserID).Scan(&P.Post.User_id, &P.Post.FirstName, &P.Post.LastName, &P.Post.Avatar, &P.Post.Id, &P.Post.Group_id, &P.Post.Titre, &P.Post.Image, &P.Post.Content, &P.Post.Privacy, &P.Post.CreationDate, &P.GroupName, &P.Description)
 	if sqlErr == sql.ErrNoRows {
 		return sqlErr
 	}
@@ -85,7 +85,7 @@ func (P *PostDetails) GetComments(DB *sql.DB) error {
 func (U *User) GetPosts(controllerDB *sql.DB) ([]FeedPost, error) {
 
 	statement, err := controllerDB.Prepare(`
-	SELECT U.id , U.firstName , U.lastName , P.id , coalesce(P.Group_id,0) as Group_id , P.titre , coalesce(P.image ,'') as image , P.content , P.privacy , coalesce(P.creationDate,"") as creationDate ,coalesce(G.title,"") as groupName ,coalesce(G.description,"") as description
+	SELECT U.id , U.firstName , U.lastName ,coalesce(U.avatar, '') as avatar,U.ispublic, P.id , coalesce(P.Group_id,0) as Group_id , P.titre , coalesce(P.image ,'') as image , P.content , P.privacy , coalesce(P.creationDate,"") as creationDate ,coalesce(G.title,"") as groupName ,coalesce(G.description,"") as description
 	FROM Post as P 
 	JOIN User as U on U.id = P.User_id
    	LEFT JOIN "Group" as G on P.Group_id = G.id
@@ -102,8 +102,6 @@ func (U *User) GetPosts(controllerDB *sql.DB) ([]FeedPost, error) {
 		return []FeedPost{}, err
 	}
 
-	fmt.Println("the user id", U.ID)
-
 	posts := []FeedPost{}
 
 	lines, err := statement.Query(U.ID, U.ID, U.ID, U.ID)
@@ -114,7 +112,7 @@ func (U *User) GetPosts(controllerDB *sql.DB) ([]FeedPost, error) {
 
 	for lines.Next() {
 		post := FeedPost{}
-		err = lines.Scan(&post.User_id, &post.FirstName, &post.LastName, &post.Id, &post.Group_id, &post.Titre, &post.Image, &post.Content, &post.Privacy, &post.CreationDate, &post.GroupName, &post.Description)
+		err = lines.Scan(&post.User_id, &post.FirstName, &post.LastName, &post.Avatar ,&post.IsPublic, &post.Id, &post.Group_id, &post.Titre, &post.Image, &post.Content, &post.Privacy, &post.CreationDate, &post.GroupName, &post.Description)
 		if err != nil {
 			return []FeedPost{}, err
 		}
@@ -217,4 +215,3 @@ func GetGroupPost(DB *sql.DB, groupId int) ([]Post ,error) {
 	}
 	return posts ,nil
 }
-

@@ -202,3 +202,64 @@ func GetGroupMemberCount(db *sql.DB, groupID int) (int, error) {
 
 	return count, nil
 }
+
+func (G *Group) GetUserOfGroup(DB *sql.DB)([]int,error){
+	users:=[]int{}
+	req:=`SELECT "User_id" FROM "Joinner" WHERE "Group_id"=?`
+	row,err:=DB.Query(req,G.ID)
+	if err!=nil {
+		return users,err
+	}
+	usr:=0
+	for row.Next(){
+		row.Scan(&usr)
+		users = append(users, usr)
+	}
+	return users,nil
+}
+
+func (G *Group) GetGroupMembers(DB *sql.DB) ([]User, error) {
+    users := []User{}
+    query := `
+        SELECT u.id, u.firstname, u.lastname, u.avatar
+        FROM "User" u
+        JOIN "Joinner" j ON u.id = j.User_id
+        WHERE j.Group_id = ?
+    `
+    rows, err := DB.Query(query, G.ID)
+    if err != nil {
+        return users, fmt.Errorf("failed to query group members: %v", err)
+    }
+    defer rows.Close()
+
+    for rows.Next() {
+        var user User
+        err := rows.Scan(&user.ID, &user.FirstName, &user.LastName, &user.Avatar)
+        if err != nil {
+            return users, fmt.Errorf("failed to scan row: %v", err)
+        }
+        users = append(users, user)
+    }
+
+    if err := rows.Err(); err != nil {
+        return users, fmt.Errorf("error during rows iteration: %v", err)
+    }
+
+    return users, nil
+}
+
+func GetGroupWithMembers(db *sql.DB, groupID int) (*Group, []User, error) {
+	// Récupérer les informations du groupe
+	group, err := GetGroupByID(db, groupID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get group by ID: %v", err)
+	}
+
+	// Récupérer les membres du groupe
+	members, err := group.GetGroupMembers(db)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get group members: %v", err)
+	}
+
+	return group, members, nil
+}

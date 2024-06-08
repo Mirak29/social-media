@@ -3,10 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"html"
 	"net/http"
-	"social_network/db"
-	"social_network/global"
 	helper "social_network/helper"
 	"social_network/models"
 	"strconv"
@@ -29,6 +26,7 @@ type NewUser struct {
 	Avatar      string `json:"avatar"`
 	Isrequested bool   `json:"is_requested"`
 }
+
 type GroupDetail struct {
 	NbrFollowers int            `json:"nbrfollowers"`
 	Events       []models.Event `json:"events"`
@@ -37,7 +35,6 @@ type GroupDetail struct {
 }
 
 func CreateFollowGroup(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("HERE")
 	type GroupFollowData struct {
 		GroupID int `json:"groupId"`
 		UserID  int `json:"userId"`
@@ -52,15 +49,15 @@ func CreateFollowGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user = models.User{}
-
-	errr := user.GetUserById(db.DB, followData.UserID)
+fmt.Println("in createfollow")
+	errr := user.GetUserById(DB, followData.UserID)
 	if errr != nil {
-		fmt.Println("111")
+		fmt.Println(err)
 		helper.ErrorPage(w, 500)
 		return
 	}
 
-	group, errg := models.GetGroupByID(db.DB, followData.GroupID)
+	group, errg := models.GetGroupByID(DB, followData.GroupID)
 	if errg != nil {
 		fmt.Println("t")
 		helper.ErrorPage(w, 500)
@@ -70,34 +67,48 @@ func CreateFollowGroup(w http.ResponseWriter, r *http.Request) {
 	var notification = models.Notification{}
 	notification.SenderID = user.ID
 	notification.User_id = group.UserID
-	notification.Type = "follow-Group"
+	notification.Type = "join-Group"
 	notification.Group_id = group.ID
 	notification.Status = "false"
-	ern := notification.CreateNotification(db.DB)
-	if ern != nil {
-		fmt.Println(ern)
+	notification.FirstName = user.FirstName
+	notification.LastName = user.LastName
+	notification.Avatar = user.Avatar
+
+	notichecker, errn:=models.GetNotificationByUserIDAndType(DB, notification.SenderID, notification.User_id, notification.Type, notification.Group_id)
+	if errn != nil {
+		fmt.Println(errn)
 		helper.ErrorPage(w, 500)
-		return
+	}
+
+	if len(notichecker) == 0 {
+		ern := notification.CreateNotification(DB)
+		if ern != nil {
+			fmt.Println(ern)
+			helper.ErrorPage(w, 500)
+		}
+		currentGroup, err := models.GetGroupByID(DB,  group.ID)
+		if err != nil {
+			helper.ErrorPage(w, 500)
+			return
+		}
+		notification.GroupTitle=currentGroup.Title
+		SendSocketNotification(notification, "notification")
 	}
 
 }
 
 func CreateGroupHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("salam dialo 1")
-	auth, userEmail, _ := helper.Auth(db.DB, r)
-	if !auth {
-		fmt.Println("Not registered")
-		return
-	}
+	_, userEmail, _ := helper.Auth(DB, r)
+
 	var user = models.User{}
-	err := user.GetUserByEmail(db.DB, userEmail)
+	err := user.GetUserByEmail(DB, userEmail)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	var newGroup models.Group
-	fmt.Println(r)
+
 	err = json.NewDecoder(r.Body).Decode(&newGroup)
 	if err != nil {
 		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
@@ -109,27 +120,23 @@ func CreateGroupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newGroup.UserID = user.ID
-	lastInsertId, err := newGroup.CreateGroup(db.DB)
+	lastInsertId, err := newGroup.CreateGroup(DB)
 	if err != nil {
 		http.Error(w, "Failed to create group", http.StatusInternalServerError)
 		fmt.Println(err)
 		fmt.Println("in user")
 		return
 	}
-	er := models.JoinGroup(db.DB, user.ID, int(lastInsertId))
+	er := models.JoinGroup(DB, user.ID, int(lastInsertId))
 	if er != nil {
 		fmt.Println(er)
 		return
 	}
-
-	roomId := strconv.FormatInt(lastInsertId, 10)
-	err = global.WS_HANDLER.CreateRoomFunc(roomId, newGroup.Title)
-	if err != nil {
-		http.Error(w, "Failed to create room", http.StatusInternalServerError)
-		fmt.Println(err)
-		return
+	for c, _ := range Clients {
+		if c.ID == user.ID {
+			c.Groups = append(c.Groups, int(lastInsertId))
+		}
 	}
-	global.HUB.JoinRoom(roomId, strconv.Itoa(user.ID))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -140,52 +147,10 @@ func CreateGroupHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func CreateEvent(w http.ResponseWriter, r *http.Request) {
-	var user = models.User{}
-	_, userEmail, _ := helper.Auth(db.DB, r)
-
-	err := user.GetUserByEmail(db.DB, userEmail)
-	if err != nil {
-		fmt.Println("1")
-		fmt.Println(err)
-		helper.ErrorPage(w, 500)
-		return
-	}
-	fmt.Println("======------======")
-	fmt.Println(user)
-	groupId := r.FormValue("groupId")
-	title := html.EscapeString(strings.TrimSpace(r.FormValue("title")))
-	des := html.EscapeString(strings.TrimSpace(r.FormValue("description")))
-	date := r.FormValue("date")
-	time := r.FormValue("time")
-	var event = models.Event{}
-	event.Userid = user.ID
-	event.Title = title
-	event.Description = des
-	event.Date = date
-	event.Time = time
-	grId, errGrid := strconv.Atoi(groupId)
-	if errGrid != nil {
-		helper.ErrorPage(w, 500)
-		return
-	}
-
-	event.GroupId = grId
-
-	errc := event.CreateEvent(db.DB)
-	if errc != nil {
-		fmt.Println(errc)
-		helper.ErrorPage(w, 500)
-		return
-	}
-
-	helper.WriteJSON(w, 200, map[string]interface{}{"success": true}, nil)
-}
-
 func GetGroupDetail(w http.ResponseWriter, r *http.Request) {
 	var user = models.User{}
-	_, userEmail, _ := helper.Auth(db.DB, r)
-	err := user.GetUserByEmail(db.DB, userEmail)
+	_, userEmail, _ := helper.Auth(DB, r)
+	err := user.GetUserByEmail(DB, userEmail)
 	if err != nil {
 		helper.ErrorPage(w, 500)
 		return
@@ -198,27 +163,28 @@ func GetGroupDetail(w http.ResponseWriter, r *http.Request) {
 		helper.ErrorPage(w, 500)
 		return
 	}
-	gr, err := models.GetGroupByID(db.DB, grId)
+	gr, err := models.GetGroupByID(DB, grId)
 	if err != nil {
 		helper.ErrorPage(w, 500)
 		return
 	}
-	ismem, errm := user.IsGroupmemeber(db.DB, grId)
+	ismem, errm := user.IsGroupmemeber(DB, grId)
 	if errm != nil || !ismem {
 		helper.ErrorPage(w, 500)
 		return
 	}
-	events, erre := models.GetEventsByGroupId(db.DB, grId)
+	events, erre := models.GetEventsByGroupId(DB, grId)
 	if erre != nil {
+		fmt.Println(erre)
 		helper.ErrorPage(w, 500)
 		return
 	}
-	nbr, errgm := models.GetGroupMemberCount(db.DB, grId)
+	nbr, errgm := models.GetGroupMemberCount(DB, grId)
 	if errgm != nil {
 		helper.ErrorPage(w, 500)
 		return
 	}
-	posts, errp := models.GetGroupPost(db.DB, grId)
+	posts, errp := models.GetGroupPost(DB, grId)
 	if errp != nil {
 		helper.ErrorPage(w, 500)
 		return

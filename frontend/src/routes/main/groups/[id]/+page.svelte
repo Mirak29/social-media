@@ -1,18 +1,20 @@
 <script>
     import { Modal, Content, Trigger } from "sv-popup"
+    import axios from "axios";
     import { enhance } from "$app/forms";
     import Posts from "../../post.svelte";
     import CreatePost from "./createpost.svelte"
     import Comment from "../../comments.svelte"
+    
+    import { PUBLIC_BACKEND_URL_FRONTEND,PUBLIC_SOCKET_URL } from '$env/static/public';
+
     export let data;
-    console.log('data received GET', data);
     let grpInfo = data?.res?.result?.groupDetail?.groupdata;
     let evts = data?.res?.result?.groupDetail?.events
     console.log('event', evts);
     let nbrFollower = data?.res?.result?.groupDetail?.nbrfollowers
     export let form;
     $: closed =false
-    $: console.log('data received', form);
 
     $: if (form?.error === 'no') {
         closed = true;
@@ -28,8 +30,27 @@
     }
     let CommSection = { display: "none", data: {} };
 
+    let responses = {}; 
+
+    async function handleResponse(eventId, response) {
+        let url = `${PUBLIC_BACKEND_URL_FRONTEND}/getoption?eventid=${eventId}&response=${response}`;
+        try {
+            let header={
+                cookie:document.cookie
+            }
+            const config = { method:"get",withCredentials: true , header,mode: 'no-cors' };
+            let responsess = await axios(url, config)
+            responses[eventId] = response;
+
+            // return response.data
+        } catch (err) {
+            console.log("ERORR",  err);
+        }
+    }
+
        
 </script>
+
 
 
 <div class="main-content right-chat-active">
@@ -63,11 +84,21 @@
                                                 {form.error}
                                             </div>
                                         {/if}
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <input type="checkbox" id="going" name="going" checked disabled>
+                                                <label for="going">Going</label>
+                                            </div>
+                                            <div>
+                                                <input type="checkbox" id="notgoing" name="notgoing" checked disabled>
+                                                <label for="notgoing">Not Going</label>
+                                            </div>
+                                        </div>
                                         <button type="submit">Create</button>
                                     </form>
                                 </Content>
                                 <Trigger>
-                                    <a href="#" class="bg-success p-3 z-index-1 rounded-3 text-white font-xsssss text-uppercase fw-700 ls-3">New Event</a>
+                                    <a href="#" class="bg-success p-3 z-index-1 rounded-3 text-white font-xsssss text-uppercase fw-700 ls-3"on:click={() => { closed = false; }}>New Event</a>
                                 </Trigger>
                             </Modal>
                             
@@ -78,7 +109,7 @@
                     <div class="card w-100 shadow-xss rounded-xxl border-0 mb-3">
                         <div class="card-body d-block p-4">
                             <h4 class="fw-700 mb-3 font-xsss text-grey-900">About</h4>
-                            <p class="fw-500 text-grey-500 lh-24 font-xssss mb-0">{grpInfo.description}</p>
+                            <p class="fw-500 text-grey-500 lh-24 font-xssss mb-0">{grpInfo?.description}</p>
                         </div>
                         <div class="card-body border-top-xs d-flex">
                             <i class="feather-lock text-grey-500 me-3 font-lg"></i>
@@ -127,6 +158,7 @@
                         <!-- <div>{data.res.result.groupDetail.events}</div> -->
                         {#if data?.res?.result?.groupDetail?.events && data?.res?.result?.groupDetail?.events.length >  0}
                             {#each data?.res?.result?.groupDetail?.events as event, index}
+                            <div class="event-card">
                                 <div class="card-body d-flex pt-0 ps-4 pe-4 pb-3 overflow-hidden">
                                     <div class="{getEventColorClass(index)} me-2 p-3 rounded-xxl"><h4 class="fw-700 font-lg ls-3 lh-1 text-white mb-0">
                                         <span class="ls-1 d-block font-xsss text-white fw-600">
@@ -137,7 +169,24 @@
                                             {new Date(event.date).getFullYear()}
                                         </span></div>
                                     <h4 class="fw-700 text-grey-900 font-xssss mt-2">{event.title}<span class="d-block font-xsssss fw-500 mt-1 lh-4 text-grey-500">{event.description}</span> </h4>
+                                    
                                 </div>
+                                
+                                <div class="fw-700 text-grey-900 font-xssss mt-2 question-container">
+                                    <p>Voulez-vous participer à cet événement ?</p>
+                                    <div class="d-flex justify-content-center" style="margin-bottom: 5%;">
+
+                                        {#if responses[event.id] === 'Oui' || event.isgoing == true}
+                                             <button class="btn bg-success mr-12 btn-full-width fw-700 text-grey-900 font-xssss mt-2" >You're IN 📌✔</button>
+                                        {:else if responses[event.id] === 'Non' || event.isgoing == false}
+                                        <button class="btn bg-warning mr-12 btn-full-width fw-700 text-grey-900 font-xssss mt-2" >Ya kham Gayin ❌</button>
+                                        {:else}
+                                        <button class="btn bg-success  mr-12  fw-700 text-grey-900 font-xssss mt-2" on:click={() => handleResponse(event.id, 'Oui')}>Oui</button>
+                                        <button class="btn bg-grey  fw-700 text-grey-900 font-xssss mt-2" on:click={() => handleResponse(event.id, 'Non')}>Non</button>
+                                        {/if}
+                                    </div>
+                                </div>
+                            </div>
                             {/each}
                         {/if}
                          
@@ -186,9 +235,9 @@
           border:  1px solid #ccc;
           border-radius:  5px;
           background-color: #f9f9f9;
-              display: flex;
-              justify-content: center;
-              align-items: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
       
         label {
@@ -225,6 +274,39 @@
         font-size:  0.8em;
         color: #888;
     }
-      
+
+    .question-container {
+        text-align: center;
+        margin-top:  20px; 
+    }
+    .question-container p {
+        margin-bottom:  10px; 
+    }
+    .question-container .btn {
+        margin-right:  5px; 
+    }
+    .btn-full-width {
+        width:  100%;
+    }
+
+    .event-card {
+    background-color: white;
+    border-radius:  10px;
+    box-shadow:  0  4px  6px rgba(0,  0,  0,  0.1);
+    margin-bottom:  20px;
+    padding:  20px;
+    transition: transform  0.3s ease;
+}
+
+
+.event-card h4 {
+    margin-bottom:  10px;
+}
+
+.event-card p {
+    margin-bottom:  10px;
+}
+
+
 
 </style>

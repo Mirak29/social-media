@@ -5,7 +5,6 @@ import (
 	"html"
 	"net/http"
 	"regexp"
-	"social_network/db"
 	helper "social_network/helper"
 	"social_network/models"
 	"strings"
@@ -26,11 +25,16 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	user.BirthDate = html.EscapeString(strings.TrimSpace(r.FormValue("birthdate")))
 	user.Avatar = r.FormValue("avatar")
 	user.NickName = html.EscapeString(strings.TrimSpace(r.FormValue("nickname")))
-	user.AboutMe = html.EscapeString(strings.TrimSpace(r.FormValue("aboutme")))
+	if user.AboutMe = html.EscapeString(strings.TrimSpace(r.FormValue("bio"))); len(user.AboutMe) > 50 {
+		helper.ErrorMessage(w, "Bio is limited to 50 characters")
+		return
+	}
+
 	if !verifLen(password, user.FirstName, user.LastName, user.Email, user.BirthDate) {
 		helper.ErrorMessage(w, "Enter at least 2 input characters")
 		return
 	}
+
 	user.IsPublic = 1
 	if !isEmailValid(user.Email) {
 		helper.ErrorMessage(w, "bad format of email")
@@ -38,7 +42,7 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	}
 	// haspassword, errCrypt := bcrypt.GenerateFromPassword([]byte(password), 5)
 	user.TokenLogin = helper.LognToken(user.Email, password)
-	err := user.CreateUser(db.DB)
+	err := user.CreateUser(DB)
 
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "email already exists") {

@@ -4,7 +4,7 @@ import (
 	// "social_network/controllers"
 	"fmt"
 	"net/http"
-	"social_network/db"
+	"social_network/controller"
 	helper "social_network/helper"
 	"strings"
 )
@@ -28,12 +28,27 @@ func Getmethode(r *http.Request, methode string) bool {
 
 // *****************************CHECK IF THE USER IS LOGGING OR NOT***************************
 func Log(next http.HandlerFunc) http.HandlerFunc {
-
+	
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
-		if is, _, _ := helper.Auth(db.DB, r); is {
+		remotehost:=r.Header.Get("Origin")
+		fmt.Println("host client",remotehost)
+		if remotehost =="" {
+			remotehost="*"
+		}
+		w.Header().Set("Access-Control-Allow-Origin",  remotehost)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		
+		if strings.ToLower(r.Method) == "options" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if is, _,_ := helper.Auth(controller.DB, r); is {
 			next.ServeHTTP(w, r)
 		} else {
+			fmt.Println("not connected")
 			w.WriteHeader(http.StatusForbidden)
 			w.Write([]byte(`{"error":"no access","success":false}`))
 		}
@@ -43,8 +58,7 @@ func Log(next http.HandlerFunc) http.HandlerFunc {
 
 func IsAuth(next http.HandlerFunc) http.HandlerFunc {
 	fnt := func(w http.ResponseWriter, r *http.Request) {
-		if is, _, _ := helper.Auth(db.DB, r); is {
-			w.WriteHeader(302)
+		if is, _ ,_:= helper.Auth(controller.DB, r); is {
 			w.Write([]byte(`{"error":"Connected","success":false}`))
 		} else {
 			next.ServeHTTP(w, r)
@@ -58,7 +72,7 @@ func Ispath(next http.HandlerFunc, path string) http.HandlerFunc {
 		if r.URL.Path == "/server/"+path {
 			next.ServeHTTP(w, r)
 		} else {
-			fmt.Println(r.URL.Path, "error 404")
+			fmt.Println(r.URL.Path,"error 404")
 			w.WriteHeader(404)
 			w.Write([]byte(`{"error":"page not found","success":false}`))
 		}
@@ -68,11 +82,12 @@ func Ispath(next http.HandlerFunc, path string) http.HandlerFunc {
 
 func CheckMethod(next http.HandlerFunc, methode string) http.HandlerFunc {
 	fnt := func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println(r.Method)
+
 		if strings.ToLower(r.Method) == methode {
 			next.ServeHTTP(w, r)
 			return
 		}
+
 		w.WriteHeader(405)
 		w.Write([]byte(`{"error":"Wrong methode","success":false}`))
 	}

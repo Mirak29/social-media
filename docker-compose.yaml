@@ -1,0 +1,17 @@
+version: '3.7'
+
+services:
+  backend:
+    build: backend/.
+    ports:
+      - "8080:8080"
+  frontend:
+    build: "frontend/."
+    environment:
+      - PUBLIC_BACKEND_URL=http://backend:8080/server
+      # - PUBLIC_SOCKET_URL=ws://backend:8080/server
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+  

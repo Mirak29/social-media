@@ -3,44 +3,36 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"social_network/db"
 	"social_network/helper"
 	"social_network/models"
 )
 
 func Home(w http.ResponseWriter, r *http.Request) {
-	_, _, user_id := helper.Auth(db.DB, r)
-
+	_, _, user_id := helper.Auth(DB, r)
 	user := models.User{ID: user_id}
-	fmt.Println("THE USER ID BEFORE ", user.ID)
-	listusers, err := user.GetUnFollow(db.DB, 4)
-	fmt.Println("THE USER ID AFTER ", user.ID)
+	notif := models.Notification{}
 
-	followerAndfollowing, errfol_wing := user.GetFollowerAndFollowing(db.DB, user_id)
-	fmt.Println("rer", followerAndfollowing)
-	posts, errpost := user.GetPosts(db.DB)
-	if err != nil || errpost != nil || errfol_wing != nil {
-		fmt.Println(errfol_wing)
-		helper.ErrorPage(w, 500)
-		return
-	}
-	follower, err := user.GetFollowers(db.DB)
-	if err != nil {
-		fmt.Println(err)
-		helper.ErrorPage(w, 500)
-		return
-	}
+	// followerAndfollowing, errfol_wing := user.GetFollowerAndFollowing(DB, user_id)
+	notifications, errNotif := notif.GetNotification(DB, user_id)
 
-	followed, err := user.GetFollowed(db.DB)
-	if err != nil {
-		fmt.Println(err)
+	user.GetUserById(DB,user_id)
+	listusers, err := user.GetUnFollow(DB, 4)
+	user = models.User{ID: user_id}
+	follower, errfolow := user.GetFollowers(DB)
+	user = models.User{ID: user_id}
+	followed, errfolowed := user.Folower(DB,user_id)
+
+	user.ID = user_id
+	posts, errpost := user.GetPosts(DB)
+
+	if err != nil || errpost != nil || errfolowed != nil || errNotif != nil || errfolow!=nil{
+	fmt.Println(err  ,errpost  ,errfolowed  ,errNotif  ,errfolow)
 		helper.ErrorPage(w, 500)
 		return
 	}
 	contacts := append(follower, followed...)
-
-	err = helper.WriteJSON(w, http.StatusOK, map[string]interface{}{"success": true, "folow_and_following": follower, "listesusers": listusers, "posts": posts, "contacts": contacts}, nil)
-	if err != nil {
+	err = helper.WriteJSON(w, http.StatusOK, map[string]interface{}{"success": true,"folow_and_following":follower, "listesusers":listusers,"posts":posts ,"notifications":notifications, "contacts" : contacts , "user" :user}, nil)
+	if err!=nil {
 		fmt.Println(err)
 		helper.ErrorPage(w, 400)
 		return

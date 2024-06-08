@@ -1,15 +1,13 @@
 import { makeRequest } from "$lib/api.js";
 import { authenticateUser } from "$lib/auth/auth.js";
-import { localStorageObj } from "$lib/db.js";
-import { redirect } from "@sveltejs/kit";
 import { generateRandom, saveImage } from "$lib/index.js";
 
+import { redirect } from "@sveltejs/kit";
+import { localStorageObj } from "../db.js";
 
-export const load = async ({ cookies }) => {
-
-    console.log(localStorageObj?.data);
+export const load = async ({ cookies,locals }) => {
     if (localStorageObj?.data?.user) {
-        const IsAuth = await authenticateUser(cookies)
+        const IsAuth = await authenticateUser(cookies,locals)
         if (IsAuth) {
             redirect(302, "/")
         }
@@ -18,18 +16,25 @@ export const load = async ({ cookies }) => {
 
 const validateFormData = (formData) => {
     const emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
-    const fields = ['email', 'password', 'firstname', 'lastname', 'birthdate'];
+    const fields = ['email', 'password', 'firstname', 'lastname'];
 
     for (let field of fields) {
         const value = formData.get(field);
-        if (!value || value.length < 2) {
+        if (!value || value.length < 2 || value.length > 50) {
             return [false, field];
         }
         if (field === 'email' && !emailRegex.test(value)) {
             return [false, field];
         }
     }
-
+    const value = formData.get("bio");
+    if (value.length >150) {
+        return [false, "bio"];
+    }
+    const value1 = formData.get("nickname");
+    if (value1.length >50) {
+        return [false, "nickname"];
+    }
     return [true, ''];
 }
 
@@ -53,10 +58,10 @@ export const actions = {
             }
             if (errorMsg.length == 0) {
                 let response = await makeRequest("register", "POST", formDatas)
-                if (response.data.success == true) {
+                if (response?.data?.success == true) {
                     redirect(302, "/login")
                 }
-                errorMsg = response.data.error
+                errorMsg = response?.data?.error
             }
         } else {
             errorMsg = err.toUpperCase() + ' invalid. Veuillez verifier et reesayer.'

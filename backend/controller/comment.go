@@ -2,28 +2,25 @@ package controller
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"social_network/db"
 	helper "social_network/helper"
 	"social_network/models"
 )
 
 func AddCommentHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_, _, userId := helper.Auth(db.DB, r)
+	_, _, userId := helper.Auth(DB, r)
 
 	newComment := models.Comment{
 		UserId: userId,
 	}
 	err := json.NewDecoder(r.Body).Decode(&newComment)
-	fmt.Println("here is the comment ", newComment)
 	if err != nil || !newComment.ValidateComment() {
 		helper.ErrorPage(w, 400)
 		return
 	}
 
-	res, err := newComment.IsAllowedToComment(db.DB)
+	res, err := newComment.IsAllowedToComment(DB)
 	if err != nil {
 		helper.ErrorPage(w, 500)
 		return
@@ -34,7 +31,7 @@ func AddCommentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newCommentId, err := newComment.Create(db.DB)
+	newCommentId, err := newComment.Create(DB)
 	if err != nil {
 		helper.ErrorPage(w, 500)
 		return

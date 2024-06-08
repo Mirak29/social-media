@@ -1,82 +1,45 @@
 <script>
     import { Modal, Content, Trigger } from "sv-popup"
-    import { makeRequest } from "$lib/api";
+    import { enhance } from "$app/forms";
+    import axios from "axios";
     
+	import { PUBLIC_BACKEND_URL_FRONTEND } from '$env/static/public';
     export let data;
-    console.log(data);
-    let groups = data?.res?.result;
+   $: console.log("group data fro pape gondia",data?.res?.result);
+    $: groups = data?.res?.result;
     let filter = 'joined';
-    
 
     function updateFilter(newFilter) {
         filter = newFilter;
     }
     $: closed =false
 
-    function validateForm(groupIdInput, userIdInput, usersSelect) {
-
-        if (isNaN(groupIdInput) || isNaN(userIdInput)) {
-            return false;
-        }
-
-        if (usersSelect.length ===  0) {
-            return false;
-        }
-
-        return true;
-    }
 
     let selectedUsers = [];
     let formerror = '';
-    let copiedGroups = {...groups};
-    async function handleSubmit() {
-        const groupData = {
-            groupId:  document.getElementById('groupId').value,
-            userId:  document.getElementById('userId').value,
-            userIds: selectedUsers
-        };
-
-        try {
-            if (validateForm(groupData.groupId, groupData.userId, groupData.userIds)) {
-                const response = await makeRequest("invitegroup","POST",JSON.stringify(groupData))
-
-                if (response) {
-                    throw new Error(`HTTP error! status:`);
-                }
-                closed = true;
-                groups?.joined.forEach(group => {
-                    group.suggests.forEach(user => {
-                        if (selectedUsers.includes(user.id)) {
-                            user.is_requested = true;
-                        }
-                    });
-                });
-                selectedUsers = [];
-                formerror = '';
-            }else{
-                formerror = 'ERROR ON FORM'
-            }
-        } catch (error) {
-            console.error('ERROR : ', error);
-        }
-    }
 
     // let copiedGroups = {...groups};
     async function handleFollowClick(groupId, userId) {
-        console.log('CLICKED');
         const requestData = {
             groupId: groupId,
             userId: userId
         };
 
-        try {
-            const response = await makeRequest('followgroup', 'POST', JSON.stringify(requestData));
+        const config = {
+            withCredentials: true, // Envoyer les cookies avec la requête
+        };
 
-            if (response) {
+        try {
+            let response = await axios.post(
+                `${PUBLIC_BACKEND_URL_FRONTEND}/followgroup`,
+                requestData,
+                config
+            );
+
+            if (response?.status != 200) {
                 throw new Error(`HTTP error! status:`);
             }
-            console.log('REQUEST SENDED');
-            copiedGroups.Notjoined = copiedGroups.Notjoined.map(group => {
+            groups.Notjoined = groups.Notjoined.map(group => {
                 if (group.id === groupId) {
                     return {...group, notif_type: true};
                 }
@@ -95,9 +58,6 @@
                 user.last_name.toLowerCase().includes(searchText.toLowerCase());
         });
     }
-
-    
-    
     
 </script>
 
@@ -139,7 +99,24 @@
                                         <a href="#" class="d-lg-block d-none"><i class="feather-video btn-round-md font-md bg-primary-gradiant text-white"></i></a>
                                         <Modal button={false} close={closed}>
                                             <Content>       
-                                                <form on:submit|preventDefault={handleSubmit}>
+                                                <form method="post"  action="?/invitegroup" use:enhance={() => {
+                                                    return async ({ result }) => {
+                                                        
+                                                        if (result.data.result == true) {
+                                                            groups?.joined.forEach(group => {
+                                                                group.suggests.forEach(user => {
+                                                                    if (selectedUsers.includes(user.id) && group.id == result.data.formdata.groupId) {
+                                                                        user.is_requested = true;
+                                                                    }
+                                                                });
+                                                            });
+                                                            selectedUsers = [];
+                                                            formerror = '';
+                                                            closed = true
+                                                        }
+                                                    };
+                                                }}> 
+                                                <!-- on:submit|preventDefault={handleSubmit}> -->
                                                     <div>Select users to invite into GROUP : {group.title}</div>
                                                     <input type="text" placeholder="Recherche" bind:value={searchValue} on:input={e => searchValue = e.target.value} />
                                                     <p class="danger fw-100 text-danger">
@@ -150,25 +127,25 @@
                                                     <input type="hidden" id="groupId" name="groupId" value={group.id}>
                                                     <input type="hidden" id="userId" name="userId" value={groups.userid}>
                                                     <select id="usersSelect" name="usersSelect" multiple bind:value={selectedUsers}>
-                                                        {#if groups.joined[0].suggests && groups.joined[0].suggests.length >  0}
-                                                        {#each filterUsers(searchValue, index) as user}
-                                                        {#if user.is_requested}
-                                                            <option data-email="already requested" value="{user.id}" disabled>
-                                                                {user.first_name} {user.last_name}
-                                                            </option>
-                                                        {:else}
-                                                            <option data-email="{user.email}" value="{user.id}">
-                                                                {user.first_name} {user.last_name}
-                                                            </option>
-                                                        {/if}
-                                                        {/each}
+                                                        {#if group.suggests && group.suggests.length >  0}
+                                                            {#each  group.suggests as user}
+                                                                {#if user.is_requested}
+                                                                    <option data-email="already requested" value="{user.id}" disabled>
+                                                                        {user.first_name} {user.last_name}
+                                                                    </option>
+                                                                {:else}
+                                                                    <option data-email="{user.email}" value="{user.id}">
+                                                                        {user.first_name} {user.last_name}
+                                                                    </option>
+                                                                {/if}
+                                                            {/each}
                                                         {/if}
                                                     </select>
                                                     <button type="submit">Invite user(s)</button>
                                                 </form>
                                             </Content>
                                             <Trigger>
-                                                <a href="#" class="text-center p-2 lh-24 w100 ms-1 ls-3 d-inline-block rounded-xl bg-current font-xsssss fw-700 ls-lg text-white">INVITE</a>
+                                                <a href="#" class="text-center p-2 lh-24 w100 ms-1 ls-3 d-inline-block rounded-xl bg-current font-xsssss fw-700 ls-lg text-white" on:click={() => { closed = false; }}>INVITE</a>
                                             </Trigger>
                                         </Modal>
                                         
@@ -181,7 +158,7 @@
                         {/if}
                         {:else if filter === 'not'}
                         {#if groups?.Notjoined && groups?.Notjoined.length >  0}
-                        {#each copiedGroups?.Notjoined as group}
+                        {#each groups?.Notjoined as group}
                         <div class="col-md-6 col-sm-6 pe-2 ps-2">
                             <div class="card d-block border-0 shadow-xss rounded-3 overflow-hidden mb-3">
                                 <div class="card-body position-relative h100 bg-image-cover bg-image-center" style="background-image: url(/images/bb-16.png);"></div>

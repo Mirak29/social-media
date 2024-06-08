@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"net/http"
-	"social_network/db"
 	helper "social_network/helper"
 	"social_network/models"
 	"strconv"
@@ -15,19 +14,30 @@ func GetGroupMessageHandler(w http.ResponseWriter, r *http.Request) {
 		helper.ErrorPage(w, 500)
 		return
 	}
-	_, _, UserID := helper.Auth(db.DB, r)
+	_, _, UserID := helper.Auth(DB, r)
 	user := models.User{ID: UserID}
-	checker, errc := user.IsGroupmemeber(db.DB, groupId)
+	checker, errc := user.IsGroupmemeber(DB, groupId)
 	if errc != nil || !checker {
 		helper.ErrorPage(w, 400)
 		return
 	}
-	messages, errm := models.GetGroupDiscussion(db.DB, groupId)
+
+	// group,errg := models.GetGroupByID(DB, groupId)
+	// if errg != nil {
+	// 	helper.ErrorPage(w, 500)
+	// 	return
+	// }
+	group, tabuser ,errmg :=models.GetGroupWithMembers(DB, groupId)
+	if errmg != nil {
+		helper.ErrorPage(w, 500)
+		return
+	}
+	messages, errm := models.GetGroupDiscussion(DB, groupId)
 	if errm != nil {
 		helper.ErrorPage(w, 500)
 		return
 	}
-	err := helper.WriteJSON(w, http.StatusOK, map[string]interface{}{"success": true, "messages": messages}, nil)
+	err := helper.WriteJSON(w, http.StatusOK, map[string]interface{}{"success": true, "messages": messages, "userid": UserID, "currentgroup": group, "members": tabuser}, nil)
 	if err != nil {
 		fmt.Println(err)
 		helper.ErrorPage(w, 400)
@@ -40,19 +50,26 @@ func GetChatMessageHandler(w http.ResponseWriter, r *http.Request) {
 		helper.ErrorPage(w, 500)
 		return
 	}
-	_, _, UserID := helper.Auth(db.DB, r)
-	checker, errc := models.AreFriend(db.DB, receiverId, UserID)
+
+	receiver := models.User{}
+	errr:=receiver.GetUserById(DB, receiverId)
+	if errr != nil {
+		helper.ErrorPage(w, 500)
+		return
+	}
+	_, _, UserID := helper.Auth(DB, r)
+	checker, errc := models.AreFriend(DB, receiverId, UserID)
 	if errc != nil || !checker {
 		helper.ErrorPage(w, 500)
 		return
 	}
 
-	messages, errm := models.GetDiscussion(db.DB, receiverId, UserID)
+	messages, errm := models.GetDiscussion(DB, receiverId, UserID)
 	if errm != nil {
 		helper.ErrorPage(w, 500)
 		return
 	}
-	err := helper.WriteJSON(w, http.StatusOK, map[string]interface{}{"success": true, "messages": messages}, nil)
+	err := helper.WriteJSON(w, http.StatusOK, map[string]interface{}{"success": true, "messages": messages, "receiver": receiver}, nil)
 	if err != nil {
 		fmt.Println(err)
 		helper.ErrorPage(w, 400)

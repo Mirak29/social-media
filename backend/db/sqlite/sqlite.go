@@ -3,15 +3,16 @@ package sqlite
 import (
 	"fmt"
 	"log"
-	"social_network/db"
+	controller "social_network/controller"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
+
 func ApplyMigrations() error {
-	driver, err := sqlite.WithInstance(db.DB, &sqlite.Config{})
+	driver, err := sqlite.WithInstance(controller.DB, &sqlite.Config{})
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -35,7 +36,7 @@ func ApplyMigrations() error {
 }
 
 func RollbackMigrations() error {
-	driver, err := sqlite.WithInstance(db.DB, &sqlite.Config{})
+	driver, err := sqlite.WithInstance(controller.DB, &sqlite.Config{})
 	if err != nil {
 		log.Fatal(err)
 		return err

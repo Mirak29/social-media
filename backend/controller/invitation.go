@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"social_network/db"
 	helper "social_network/helper"
 	"social_network/models"
 	"strconv"
@@ -12,22 +11,22 @@ import (
 
 func GetAllNotjoinedGroups(w http.ResponseWriter, r *http.Request) {
 	var user = models.User{}
-	_, userEmail, _ := helper.Auth(db.DB, r)
+	_, userEmail, _ := helper.Auth(DB, r)
 
-	err := user.GetUserByEmail(db.DB, userEmail)
+	err := user.GetUserByEmail(DB, userEmail)
 	if err != nil {
 		helper.ErrorPage(w, 500)
 		return
 	}
 
-	groups, err := models.GetNotJoinedGroupsByUserID(db.DB, user.ID)
+	groups, err := models.GetNotJoinedGroupsByUserID(DB, user.ID)
 	if err != nil {
 		helper.ErrorPage(w, 500)
 		return
 	}
 	var groupss []NewGroup
 	for i := 0; i < len(groups); i++ {
-		not, errn := models.GetNotificationByUserIDAndType(db.DB, user.ID, groups[i].UserID, "follow-Group", groups[i].ID)
+		not, errn := models.GetNotificationByUserIDAndType(DB, user.ID, groups[i].UserID, "join-Group", groups[i].ID)
 		if errn != nil {
 			helper.ErrorPage(w, 500)
 			return
@@ -51,22 +50,7 @@ func GetAllNotjoinedGroups(w http.ResponseWriter, r *http.Request) {
 		groupss = append(groupss, gr)
 	}
 
-	follower, err := user.GetFollowers(db.DB)
-	if err != nil {
-		fmt.Println(err)
-		helper.ErrorPage(w, 500)
-		return
-	}
-
-	followed, err := user.GetFollowed(db.DB)
-	if err != nil {
-		fmt.Println(err)
-		helper.ErrorPage(w, 500)
-		return
-	}
-	friends := append(follower, followed...)
-
-	groups2, err := models.GetMemberGroupsByUserID(db.DB, user.ID)
+	groups2, err := models.GetMemberGroupsByUserID(DB, user.ID)
 	if err != nil {
 		helper.ErrorPage(w, 500)
 		return
@@ -74,8 +58,15 @@ func GetAllNotjoinedGroups(w http.ResponseWriter, r *http.Request) {
 	var groupss2 []NewGroup
 	for i := 0; i < len(groups2); i++ {
 		var friendss []NewUser
-		for j := 0; j < len(friends); j++ {
-			notfollow, errn := models.GetNotificationByUserIDAndType(db.DB, user.ID, friends[j].ID, "invite-Group", groups2[i].ID)
+
+		frs, er := user.GetFollowedAndFollowersNotInGroup(DB, groups2[i].ID)
+		if er != nil {
+			helper.ErrorPage(w, 500)
+			return
+		}
+		for j := 0; j < len(frs); j++ {
+
+			notfollow, errn := models.GetNotificationByUserIDAndType(DB, user.ID, frs[j].ID, "invited-to-join-Group", groups2[i].ID)
 			if errn != nil {
 				helper.ErrorPage(w, 500)
 				return
@@ -88,11 +79,11 @@ func GetAllNotjoinedGroups(w http.ResponseWriter, r *http.Request) {
 				requested = true
 			}
 			var fr = NewUser{
-				ID:          friends[j].ID,
-				FirstName:   friends[j].FirstName,
-				LastName:    friends[j].LastName,
-				Email:       friends[j].Email,
-				Avatar:      friends[j].Avatar,
+				ID:          frs[j].ID,
+				FirstName:   frs[j].FirstName,
+				LastName:    frs[j].LastName,
+				Email:       frs[j].Email,
+				Avatar:      frs[j].Avatar,
 				Isrequested: requested,
 			}
 			friendss = append(friendss, fr)
@@ -131,10 +122,11 @@ func CreateInvitationGroup(w http.ResponseWriter, r *http.Request) {
 		UserID  string `json:"userId"`
 		UserIDs []int  `json:"userIds"`
 	}
-
+	
 	var groupData GroupInvitationData
 
 	err := json.NewDecoder(r.Body).Decode(&groupData)
+	fmt.Println("INVITATIONdata" , groupData)
 	if err != nil {
 		helper.ErrorPage(w, 500)
 		return
@@ -149,32 +141,55 @@ func CreateInvitationGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	errr := user.GetUserById(db.DB, userID)
+	errr := user.GetUserById(DB, userID)
 	if errr != nil {
-		fmt.Println("111")
 		helper.ErrorPage(w, 500)
 		return
 	}
 
-	mem, errm := user.IsGroupmemeber(db.DB, groupID)
+	mem, errm := user.IsGroupmemeber(DB, groupID)
 	if errm != nil || !mem {
 		fmt.Println(errm)
 		helper.ErrorPage(w, 500)
 		return
 	}
 
-	for i := 0; i < len(groupData.UserIDs); i++ {
-		var notification = models.Notification{}
-		notification.SenderID = user.ID
-		notification.User_id = groupData.UserIDs[i]
-		notification.Type = "invite-Group"
-		notification.Group_id = groupID
-		notification.Status = "false"
-		ern := notification.CreateNotification(db.DB)
-		if ern != nil {
-			fmt.Println(ern)
-			helper.ErrorPage(w, 500)
-		}
+	_, _, user_id := helper.Auth(DB, r)
+	userSendingInvitations := models.User{}
+	errGettingUser := userSendingInvitations.GetUserById(DB, user_id)
+	if errGettingUser != nil {
+		helper.ErrorPage(w, 500)
+		return
 	}
 
+	for i := 0; i < len(groupData.UserIDs); i++ {
+		var notification = models.Notification{}
+		notification.SenderID = userSendingInvitations.ID
+		notification.User_id = groupData.UserIDs[i]
+		notification.Type = "invited-to-join-Group"
+		notification.Group_id = groupID
+		notification.Status = "false"
+		currrentUser := models.User{}
+		currrentUser.GetUserById(DB, groupData.UserIDs[i])
+
+		notification.FirstName = userSendingInvitations.FirstName
+		notification.LastName = userSendingInvitations.LastName
+		notification.Avatar = userSendingInvitations.Avatar
+
+		notichecker, errn:=models.GetNotificationByUserIDAndType(DB, notification.SenderID, notification.User_id, notification.Type, notification.Group_id)
+		if errn != nil {
+			fmt.Println(errn)
+			helper.ErrorPage(w, 500)
+		}
+		if len(notichecker) == 0 {
+			ern := notification.CreateNotification(DB)
+			if ern != nil {
+				fmt.Println(ern)
+				helper.ErrorPage(w, 500)
+			}
+			SendSocketNotification(notification, "notification")
+		}
+
+		
+	}
 }

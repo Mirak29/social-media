@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"social_network/db"
 	helper "social_network/helper"
 	"social_network/models"
 	"strconv"
@@ -17,7 +16,7 @@ func enableCors(w *http.ResponseWriter) {
 
 func CreatePostHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_, _, UserID := helper.Auth(db.DB, r)
+	_, _, UserID := helper.Auth(DB, r)
 	NewPost := models.Post{User_id: UserID}
 
 	err := json.NewDecoder(r.Body).Decode(&NewPost)
@@ -30,7 +29,7 @@ func CreatePostHandler(w http.ResponseWriter, r *http.Request) {
 
 	// if the Post belong to a group Check first if the user is member of the group
 	if NewPost.Group_id != 0 {
-		num, Err := NewPost.CheckGroupMember(db.DB)
+		num, Err := NewPost.CheckGroupMember(DB)
 		if Err != nil {
 			fmt.Println("Error server ", Err)
 			http.Error(w, "500 bad request.", http.StatusInternalServerError)
@@ -42,7 +41,7 @@ func CreatePostHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	idPost, creationError := NewPost.Create(db.DB)
+	idPost, creationError := NewPost.Create(DB)
 
 	if creationError != nil {
 		fmt.Println("Error creating post :", creationError)
@@ -55,10 +54,10 @@ func CreatePostHandler(w http.ResponseWriter, r *http.Request) {
 
 func PostsByUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_, _, UserID := helper.Auth(db.DB, r)
+	_, _, UserID := helper.Auth(DB, r)
 	user := models.User{ID: UserID}
 
-	posts, err := user.GetPosts(db.DB)
+	posts, err := user.GetPosts(DB)
 	if err != nil {
 		helper.ErrorPage(w, 500)
 		return
@@ -79,10 +78,10 @@ func PostDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// variable temporaire
-	_, _, UserID := helper.Auth(db.DB, r)
+	_, _, UserID := helper.Auth(DB, r)
 
 	post := models.PostDetails{}
-	Er := post.GetPost(db.DB, UserID, post_id)
+	Er := post.GetPost(DB, UserID, post_id)
 
 	if Er != nil {
 		// You don't have acces to this post or the post does not exist
@@ -96,10 +95,11 @@ func PostDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get comments of the post
-	ComErr := post.GetComments(db.DB)
+	ComErr := post.GetComments(DB)
 	if ComErr != nil {
 		helper.ErrorPage(w, 500)
 		return
 	}
-	helper.WriteJSON(w, 200, map[string]interface{}{"data": post}, r.Header)
+	helper.WriteJSON(w,200,map[string]interface{}{"data":post},r.Header)
 }
+

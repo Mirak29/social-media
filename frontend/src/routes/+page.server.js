@@ -3,8 +3,8 @@ import { authenticateUser } from "$lib/auth/auth.js";
 import { redirect } from "@sveltejs/kit";
 
 
-export const load = async ({cookies})=>{
-    const IsAuth=await authenticateUser(cookies)
+export const load = async ({cookies,locals})=>{
+    const IsAuth=await authenticateUser(cookies,locals)
     if (!IsAuth) {
         redirect(302,"/login")
     }
